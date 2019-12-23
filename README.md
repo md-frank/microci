@@ -20,10 +20,11 @@ MicroCI的定位是：
 ```
 ./webhook -ip 127.0.0.1 -port 9000 -hooks ./hooks.json
 ```
-通过如上配置就配置了一个HTTP服务，地址为：http://127.0.0.1:9000
+通过如上配置就配置了一个HTTP服务，地址为：http://127.0.0.1:9000 
 
 **hooks.json**  
-管线配置文件，在这里您可以配置多个管线，一个管理对应一个git项目。
+管线配置文件，在这里您可以配置多个管线，一个管线对应一个git项目。  
+
 ```
 {
     //管线ID，将来GIT勾子地址填：http://127.0.0.1:9000/hooks/example
@@ -92,5 +93,45 @@ REPOSITORY_DIR=/data/microci
 #========== config end ==========
 ```
 
-**example.sh（可选）**  
-示例脚本，用于触发钩子时调用，如果您不需要执行自定义脚本时则不需要
+**plugins/dotnet.sh**  
+.NET Core编译插件，本插件可实现按需编译，仅当提交的代码影响了相关项目才会重新编译
+
+**stages/example.sh（可选）**  
+示例脚本，用于触发钩子时调用，如果您不需要执行自定义脚本时则不需要，本示例使用了dotnet插件，用于编译ASP.NET Core项目
+```
+#========== config begin ==========
+
+# 选择使用的消息推送方式（pushWechat ｜ pushDingding）
+export PUSH_IM="pushWechat"
+# 微信推送专用，appToken，获取参见http://wxpusher.zjiecode.com获取
+export PUSH_WX_TOKEN="wxpusher.zjiecode.com需要的appToken"
+export PUSH_WX_DEFUID="如果代码提交者没有绑定微信UID，使用此处的默认值"
+
+# 项目前缀
+export PROJ_PREFIX="Mondol.Example."
+
+# 服务端口映射
+declare -A SVCE_PORTS
+SVCE_PORTS=(
+    ["Api"]="5001"
+    ["Identity"]="5002"
+)
+
+declare -A SVCE_WEBROOTS
+SVCE_WEBROOTS=(
+    ["Api"]="/data/microci/aowu_be/master/repo/src/wwwroot"
+    ["Identity"]="/data/microci/aowu_be/master/repo/src/wwwroot"
+)
+
+_COMMON_BUILD_PATHS=(
+    "Common" "Db" "Caching" "Service"
+)
+_COMMON_BUILD_FILES=(
+    ".cs" ".csproj" ".sln" "DocDesc.txt"
+)
+_COMMON_RESTART_FILES=(
+    "appsettings.json"
+)
+
+#========== config end ==========
+```
