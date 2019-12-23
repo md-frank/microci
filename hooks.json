@@ -1,0 +1,52 @@
+[
+    {
+        "id": "example",
+        "execute-command": "./microci.sh",
+        "command-working-directory": "/home/frank/microci",
+        "response-message": "OK",
+        "trigger-rule-mismatch-http-response-code": 400,
+        "pass-environment-to-command": [
+            {
+                "source": "string",
+                "envname": "NAME",
+                "name": "example"
+            },
+            {
+                "source": "string",
+                "envname": "GIT_URL",
+                "name": "https://ci:xxx@github.com/Mondol/ProjName.git"
+            },
+            {
+                "source": "string",
+                "envname": "STAGE_SH",
+                "name": "./stages/example.sh"
+            }
+        ],
+        "pass-arguments-to-command": [
+            {
+                "source": "string",
+                "name": "pipe"
+            }
+        ],
+        "pass-file-to-command": [
+            {
+                "source": "entire-payload",
+                "envname": "PFILE"
+            }
+        ],
+        "trigger-rule": {
+            "and": [
+                {
+                    "match": {
+                        "type": "payload-hash-sha256",
+                        "secret": "xxxxxxxxxxxxxxxxxxx",
+                        "parameter": {
+                            "source": "header",
+                            "name": "X-Gogs-Signature"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+]
