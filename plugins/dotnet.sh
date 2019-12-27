@@ -3,6 +3,8 @@
 set -o pipefail
 set -o nounset
 
+# Version 1.0.0
+
 #========== config begin ==========
 
 _COMMON_BUILD_FILES=(
@@ -55,26 +57,43 @@ function kill_proj() {
     kill $(ps -ef | grep "$PROJ_PREFIX$1" | tr -s " " | cut -d " " -f2) >/dev/null 2>&1
 }
 
+function pushMsg() {
+    local msg=$1
+    [[ $PUSH_IM == "pushDingding" ]] && msg="@$GIT_FULL_NAME $msg"
+    ./microci.sh $PUSH_IM "$msg" "$GIT_FULL_NAME"
+}
+
 function build() {
     echo "Start compiling $PROJ_NAME..."
     dotnet build -c Debug -o $OUT_TMP_DIR "$SRC_DIR/src/$PROJ_PREFIX$PROJ_NAME"
-    if [[ $? != 0 ]]; then
-        local msg="你提交到Git的代码已编译失败，请检查后重新提交。\r\n变更记录：$GIT_COMMIT_URLS"
-        [[ $PUSH_IM == "pushDingding" ]] && msg="@$GIT_FULL_NAME $msg"
-        ./microci.sh $PUSH_IM "$msg" "$GIT_FULL_NAME"
-
-        echo "compiling $PROJ_NAME fail"
+    local exitCode=$?
+    if [[ $exitCode != 0 ]]; then
+        echo "compiling $PROJ_NAME fail, exitCode:$exitCode"
+        pushMsg "你提交到Git的代码已编译失败，请检查后重新提交。\r\n变更记录：$GIT_COMMIT_URLS"
+        
         return 1
     fi
 
     # sync
     kill_proj $PROJ_NAME
-    cp -dfru $OUT_TMP_DIR/* $OUT_DIR/
+    cp -rf $OUT_TMP_DIR/* $OUT_DIR/
+    if [ $? != 0 ]; then
+        echo "Failed to copy binary file: $OUT_TMP_DIR -> $OUT_DIR"
+        pushMsg "你提交到Git的代码编译成功，但复制失败。\r\n变更记录：$GIT_COMMIT_URLS"
+
+        return 1
+    fi
 }
 
 function run() {
     # sync configs
-    cp -rfu $SRC_DIR/src/$PROJ_PREFIX$PROJ_NAME/confs/* "$OUT_DIR/confs/"
+    cp -rf $SRC_DIR/src/$PROJ_PREFIX$PROJ_NAME/confs/* "$OUT_DIR/confs/"
+    if [ $? != 0 ]; then
+        echo "Failed to copy confs file: $SRC_DIR/src/$PROJ_PREFIX$PROJ_NAME/confs -> $OUT_DIR/confs"
+        pushMsg "你提交到Git的代码同步配置文件失败。\r\n变更记录：$GIT_COMMIT_URLS"
+
+        return 1
+    fi
 
     export ASPNETCORE_ENVIRONMENT=Development
     export ASPNETCORE_URLS="http://localhost:$SVCE_PORT"
@@ -91,11 +110,13 @@ function buildOrRun() {
 
     CHGS=($(cat $CHGS_FILE))
 
-    if requireBuild $PROJ_NAME && build $PROJ_NAME ; then
-        run $PROJ_NAME
+    if requireBuild $PROJ_NAME ; then
+        if ! build $PROJ_NAME || ! run $PROJ_NAME; then
+            exit 1
+        fi
     elif requireRestart ; then
         kill_proj $PROJ_NAME
-        run $PROJ_NAME
+        ! run $PROJ_NAME && exit 1
     else
         echo "Project $PROJ_NAME no effective changes"
     fi
