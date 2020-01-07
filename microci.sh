@@ -12,7 +12,7 @@ REPOSITORY_DIR=/data/microci
 
 function showHelp() {
 	cat > /dev/stdout << END
-microci v2.0
+microci v2.0.0
 
 Usage:
 ${0} ACTION [OPTION]

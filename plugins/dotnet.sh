@@ -3,7 +3,7 @@
 set -o pipefail
 set -o nounset
 
-# Version 1.0.0
+# Version 1.0.1
 
 #========== config begin ==========
 
@@ -22,16 +22,18 @@ FUNCTIONS=(
     '
 )
 
+declare -A PUSH_USER_DICT
+
 #========== config end ==========
 
 function requireBuild() {
     local buildPaths=(${COMMON_BUILD_PATHS[@]} $1)
     for e in ${CHGS[@]}; do
         local hasChg=0
-        for e2 in ${buildPaths[@]}; do            
+        for e2 in ${buildPaths[@]}; do
             [[ $e =~ $PROJ_PREFIX$e2 ]] && hasChg=1 && break
         done
-        
+
         if [[ $hasChg == 1 ]]; then
             for e2 in ${COMMON_BUILD_FILES[@]}; do
                 [[ $e =~ $e2 ]] && hasChg=1 && break
@@ -59,8 +61,11 @@ function kill_proj() {
 
 function pushMsg() {
     local msg=$1
-    [[ $PUSH_IM == "pushDingding" ]] && msg="@$GIT_FULL_NAME $msg"
-    ./microci.sh $PUSH_IM "$msg" "$GIT_FULL_NAME"
+    local user=${PUSH_USER_DICT[$GIT_LOGIN_NAME]:-}
+    [ -z $user ] && echo "dotnet.cfg is not configured for $GIT_LOGIN_NAME" && return 1
+
+    [[ $PUSH_IM == "pushDingding" ]] && msg="@$user $msg"
+    ./microci.sh $PUSH_IM "$msg" "$user"
 }
 
 function build() {
@@ -70,7 +75,7 @@ function build() {
     if [[ $exitCode != 0 ]]; then
         echo "compiling $PROJ_NAME fail, exitCode:$exitCode"
         pushMsg "你提交到Git的代码已编译失败，请检查后重新提交。\r\n变更记录：$GIT_COMMIT_URLS"
-        
+
         return 1
     fi
 
@@ -110,11 +115,11 @@ function buildOrRun() {
 
     CHGS=($(cat $CHGS_FILE))
 
-    if requireBuild $PROJ_NAME ; then
+    if requireBuild $PROJ_NAME; then
         if ! build $PROJ_NAME || ! run $PROJ_NAME; then
             exit 1
         fi
-    elif requireRestart ; then
+    elif requireRestart; then
         kill_proj $PROJ_NAME
         ! run $PROJ_NAME && exit 1
     else
@@ -128,11 +133,24 @@ function initVars() {
     LOG_FILE=$OUT_DIR/console.log
     COMMON_BUILD_PATHS=($COMMON_BUILD_PATHS)
     COMMON_BUILD_FILES=($COMMON_BUILD_FILES)
-    COMMON_RESTART_FILES=($COMMON_RESTART_FILES)    
+    COMMON_RESTART_FILES=($COMMON_RESTART_FILES)
+
+    readConfig
+}
+
+function readConfig() {
+    local cfgFileName=$SHELL_FOLDER/dotnet.cfg
+    [ ! -f $cfgFileName ] && return 1
+
+    while read -r line; do
+        local arr=(${line//=/ })
+        PUSH_USER_DICT[${arr[0]}]=${arr[1]}
+    done <$cfgFileName
 }
 
 #========== main func begin ==========
 
+SHELL_FOLDER=$(dirname $(readlink -f "$0"))
 ACTION=${1:-help} && shift
 set +o nounset
 optTxt=${FUNCTIONS[$ACTION]}
